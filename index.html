@@ -3,19 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Snake Game - La Culebrita</title>
+    <title>Pac-Man Game - Come Galletas</title>
     <link rel="stylesheet" href="style.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.7.0/p5.min.js"></script>
 </head>
 <body>
     <div class="container">
-        <h1>🐍 Snake Game</h1>
+        <h1>👻 Pac-Man Game</h1>
         
         <div class="game-info">
             <div class="score">Puntuación: <span id="score">0</span></div>
         </div>
         
         <div class="game-board" id="gameBoard">
-            <canvas id="gameCanvas" width="400" height="400"></canvas>
+            <div id="p5-container"></div>
         </div>
         
         <div class="controls">
@@ -29,7 +30,7 @@
         </div>
         
         <div class="instructions">
-            <p>Usa las flechas del teclado para mover la serpiente</p>
+            <p>Usa las flechas del teclado para mover a Pac-Man</p>
         </div>
     </div>
     

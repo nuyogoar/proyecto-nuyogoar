@@ -1,167 +1,304 @@
 // Variables del juego
-const canvas = document.getElementById('gameCanvas');
-const ctx = canvas.getContext('2d');
-const scoreElement = document.getElementById('score');
-const finalScoreElement = document.getElementById('finalScore');
-const startBtn = document.getElementById('startBtn');
-const restartBtn = document.getElementById('restartBtn');
-const gameOverDiv = document.getElementById('gameOver');
-const gameBoard = document.getElementById('gameBoard');
-
-// Configuración del juego
-const gridSize = 20;
-const tileCount = canvas.width / gridSize;
-
-// Estado del juego
-let snake = [];
-let food = {};
-let dx = 0;
-let dy = 0;
+let game;
 let score = 0;
 let gameRunning = false;
 let gameLoop;
 
-// Inicializar el juego
-function init() {
-    // Resetear serpiente
-    snake = [
-        {x: 10, y: 10},
-        {x: 9, y: 10},
-        {x: 8, y: 10}
-    ];
-    
-    // Resetear dirección
-    dx = 1;
-    dy = 0;
-    
-    // Resetear puntuación
-    score = 0;
-    gameRunning = false;
-    
-    // Generar comida
-    generateFood();
-    
-    // Actualizar display
-    updateDisplay();
-    
-    // Dibujar estado inicial
-    draw();
-}
+// Elementos del DOM
+let scoreElement;
+let finalScoreElement;
+let startBtn;
+let restartBtn;
+let gameOverDiv;
 
-// Generar comida en posición aleatoria
-function generateFood() {
-    do {
-        food = {
-            x: Math.floor(Math.random() * tileCount),
-            y: Math.floor(Math.random() * tileCount)
-        };
-    } while (isFoodOnSnake());
-}
-
-// Verificar si la comida está en la serpiente
-function isFoodOnSnake() {
-    return snake.some(segment => segment.x === food.x && segment.y === food.y);
-}
-
-// Dibujar el juego
-function draw() {
-    // Limpiar canvas
-    ctx.fillStyle = '#2c3e50';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    
-    // Dibujar serpiente (roja con segmentos)
-    ctx.fillStyle = '#e74c3c';
-    snake.forEach((segment, index) => {
-        // Cabeza más clara, cuerpo más oscuro
-        if (index === 0) {
-            ctx.fillStyle = '#e74c3c';
-        } else {
-            ctx.fillStyle = '#c0392b';
-        }
+// Clase principal del juego Pac-Man
+class PacManGame {
+    constructor() {
+        this.canvasSize = 560;
+        this.gridSize = 28;
+        this.tileCount = this.canvasSize / this.gridSize;
         
-        ctx.fillRect(
-            segment.x * gridSize + 1, 
-            segment.y * gridSize + 1, 
-            gridSize - 2, 
-            gridSize - 2
-        );
+        // Pac-Man (serpiente)
+        this.pacman = [];
+        this.direction = { x: 1, y: 0 };
+        this.nextDirection = { x: 1, y: 0 };
+        this.mouthAngle = 0;
+        this.mouthSpeed = 0.3;
         
-        // Borde del segmento
-        ctx.strokeStyle = '#a93226';
-        ctx.lineWidth = 1;
-        ctx.strokeRect(
-            segment.x * gridSize + 1, 
-            segment.y * gridSize + 1, 
-            gridSize - 2, 
-            gridSize - 2
-        );
-    });
-    
-    // Dibujar comida (círculo azul)
-    const centerX = food.x * gridSize + gridSize / 2;
-    const centerY = food.y * gridSize + gridSize / 2;
-    const radius = (gridSize - 4) / 2;
-    
-    ctx.fillStyle = '#3498db';
-    ctx.beginPath();
-    ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
-    ctx.fill();
-    
-    // Borde del círculo
-    ctx.strokeStyle = '#2980b9';
-    ctx.lineWidth = 2;
-    ctx.stroke();
-}
-
-// Mover la serpiente
-function moveSnake() {
-    if (!gameRunning) return;
-    
-    const head = {x: snake[0].x + dx, y: snake[0].y + dy};
-    
-    // Verificar colisión con bordes - GAME OVER
-    if (head.x < 0 || head.x >= tileCount || head.y < 0 || head.y >= tileCount) {
-        gameOver();
-        return;
+        // Galleta (comida)
+        this.cookie = { x: 0, y: 0 };
+        this.cookieRotation = 0;
+        this.cookieScale = 1;
+        
+        // Pasto
+        this.grassPattern = [];
+        this.initGrass();
     }
     
-    // Verificar colisión consigo misma - GAME OVER
-    for (let segment of snake) {
-        if (head.x === segment.x && head.y === segment.y) {
+    // Inicializar patrón de pasto
+    initGrass() {
+        this.grassPattern = [];
+        for (let i = 0; i < this.tileCount; i++) {
+            this.grassPattern[i] = [];
+            for (let j = 0; j < this.tileCount; j++) {
+                this.grassPattern[i][j] = {
+                    x: i * this.gridSize + random(this.gridSize),
+                    y: j * this.gridSize + random(this.gridSize),
+                    height: random(3, 8),
+                    sway: random(TWO_PI)
+                };
+            }
+        }
+    }
+    
+    // Dibujar fondo de pasto
+    drawGrass() {
+        // Fondo verde
+        fill(34, 139, 34);
+        rect(0, 0, this.canvasSize, this.canvasSize);
+        
+        // Dibujar pasto
+        for (let i = 0; i < this.tileCount; i++) {
+            for (let j = 0; j < this.tileCount; j++) {
+                let grass = this.grassPattern[i][j];
+                push();
+                translate(grass.x, grass.y);
+                
+                // Animar el pasto
+                grass.sway += 0.02;
+                rotate(sin(grass.sway) * 0.1);
+                
+                // Dibujar brizna de pasto
+                stroke(0, 100, 0);
+                strokeWeight(1);
+                line(0, 0, 0, -grass.height);
+                pop();
+            }
+        }
+    }
+    
+    // Dibujar Pac-Man
+    drawPacMan() {
+        this.pacman.forEach((segment, index) => {
+            let x = segment.x * this.gridSize + this.gridSize / 2;
+            let y = segment.y * this.gridSize + this.gridSize / 2;
+            let radius = this.gridSize / 2 - 2;
+            
+            push();
+            translate(x, y);
+            
+            // Cuerpo de Pac-Man (amarillo)
+            fill(255, 255, 0);
+            stroke(255, 215, 0);
+            strokeWeight(2);
+            
+            if (index === 0) {
+                // Cabeza de Pac-Man con boca animada
+                this.mouthAngle += this.mouthSpeed;
+                let mouthOpen = map(sin(this.mouthAngle), -1, 1, 0.2, 0.8);
+                
+                // Dibujar Pac-Man con boca
+                arc(0, 0, radius * 2, radius * 2, 
+                    PI * mouthOpen, TWO_PI - PI * mouthOpen, PIE);
+                
+                // Ojo
+                fill(0);
+                noStroke();
+                circle(-radius * 0.3, -radius * 0.3, radius * 0.3);
+            } else {
+                // Cuerpo (círculo simple)
+                circle(0, 0, radius * 2);
+            }
+            pop();
+        });
+    }
+    
+    // Dibujar galleta
+    drawCookie() {
+        let x = this.cookie.x * this.gridSize + this.gridSize / 2;
+        let y = this.cookie.y * this.gridSize + this.gridSize / 2;
+        let radius = this.gridSize / 2 - 2;
+        
+        // Animar galleta
+        this.cookieRotation += 0.05;
+        this.cookieScale = 1 + sin(this.cookieRotation) * 0.1;
+        
+        push();
+        translate(x, y);
+        rotate(this.cookieRotation);
+        scale(this.cookieScale);
+        
+        // Cuerpo de la galleta (marrón)
+        fill(139, 69, 19);
+        stroke(101, 67, 33);
+        strokeWeight(2);
+        circle(0, 0, radius * 2);
+        
+        // Chispas de chocolate
+        fill(101, 67, 33);
+        noStroke();
+        for (let i = 0; i < 6; i++) {
+            let angle = (TWO_PI / 6) * i;
+            let sparkleX = cos(angle) * radius * 0.6;
+            let sparkleY = sin(angle) * radius * 0.6;
+            circle(sparkleX, sparkleY, 3);
+        }
+        
+        // Brillo
+        fill(160, 82, 45);
+        circle(-radius * 0.3, -radius * 0.3, radius * 0.4);
+        
+        pop();
+    }
+    
+    // Mover Pac-Man
+    movePacMan() {
+        if (!gameRunning) return;
+        
+        // Actualizar dirección
+        this.direction = { ...this.nextDirection };
+        
+        // Calcular nueva posición
+        const head = { 
+            x: this.pacman[0].x + this.direction.x, 
+            y: this.pacman[0].y + this.direction.y 
+        };
+        
+        // Verificar colisiones con bordes
+        if (head.x < 0 || head.x >= this.tileCount || 
+            head.y < 0 || head.y >= this.tileCount) {
             gameOver();
             return;
         }
+        
+        // Verificar colisión consigo mismo
+        for (let segment of this.pacman) {
+            if (head.x === segment.x && head.y === segment.y) {
+                gameOver();
+                return;
+            }
+        }
+        
+        // Agregar nueva cabeza
+        this.pacman.unshift(head);
+        
+        // Verificar si comió la galleta
+        if (head.x === this.cookie.x && head.y === this.cookie.y) {
+            eatCookie();
+        } else {
+            // Remover cola si no comió
+            this.pacman.pop();
+        }
     }
     
-    // Agregar nueva cabeza
-    snake.unshift(head);
-    
-    // Verificar si comió la comida
-    if (head.x === food.x && head.y === food.y) {
-        eatFood();
-    } else {
-        // Remover cola si no comió (para que crezca al comer)
-        snake.pop();
+    // Comer galleta
+    eatCookie() {
+        score += 1;
+        updateDisplay();
+        this.generateCookie();
+        
+        // Aumentar velocidad
+        clearInterval(gameLoop);
+        const newSpeed = Math.max(50, 150 - (score * 2));
+        gameLoop = setInterval(() => game.movePacMan(), newSpeed);
     }
     
-    draw();
-}
-
-// Comer comida
-function eatFood() {
-    score += 1; // 1 punto por comida
-    updateDisplay();
-    generateFood();
+    // Generar nueva galleta
+    generateCookie() {
+        do {
+            this.cookie = {
+                x: Math.floor(random(this.tileCount)),
+                y: Math.floor(random(this.tileCount))
+            };
+        } while (this.isCookieOnPacMan());
+    }
     
-    // Aumentar velocidad ligeramente
-    clearInterval(gameLoop);
-    const newSpeed = Math.max(50, 150 - (score * 2));
-    gameLoop = setInterval(moveSnake, newSpeed);
+    // Verificar si la galleta está en Pac-Man
+    isCookieOnPacMan() {
+        return this.pacman.some(segment => 
+            segment.x === this.cookie.x && segment.y === this.cookie.y
+        );
+    }
+    
+    // Dibujar todo
+    draw() {
+        this.drawGrass();
+        this.drawPacMan();
+        this.drawCookie();
+    }
+    
+    // Resetear juego
+    reset() {
+        this.pacman = [
+            {x: 10, y: 10},
+            {x: 9, y: 10},
+            {x: 8, y: 10}
+        ];
+        this.direction = { x: 1, y: 0 };
+        this.nextDirection = { x: 1, y: 0 };
+        this.generateCookie();
+    }
 }
 
-// Actualizar display
-function updateDisplay() {
-    scoreElement.textContent = score;
+// Configuración de p5.js
+function setup() {
+    let canvas = createCanvas(560, 560);
+    canvas.parent('p5-container');
+    
+    // Inicializar juego
+    game = new PacManGame();
+    game.reset();
+    
+    // Obtener elementos del DOM
+    scoreElement = document.getElementById('score');
+    finalScoreElement = document.getElementById('finalScore');
+    startBtn = document.getElementById('startBtn');
+    restartBtn = document.getElementById('restartBtn');
+    gameOverDiv = document.getElementById('gameOver');
+    
+    // Event listeners
+    startBtn.addEventListener('click', startGame);
+    restartBtn.addEventListener('click', restartGame);
+    
+    // Controles de teclado
+    document.addEventListener('keydown', handleKeyPress);
+}
+
+function draw() {
+    game.draw();
+}
+
+// Manejar teclas presionadas
+function handleKeyPress(e) {
+    if (!gameRunning) return;
+    
+    // Prevenir scroll
+    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+        e.preventDefault();
+    }
+    
+    switch(e.key) {
+        case 'ArrowUp':
+            if (game.direction.y === 0) {
+                game.nextDirection = { x: 0, y: -1 };
+            }
+            break;
+        case 'ArrowDown':
+            if (game.direction.y === 0) {
+                game.nextDirection = { x: 0, y: 1 };
+            }
+            break;
+        case 'ArrowLeft':
+            if (game.direction.x === 0) {
+                game.nextDirection = { x: -1, y: 0 };
+            }
+            break;
+        case 'ArrowRight':
+            if (game.direction.x === 0) {
+                game.nextDirection = { x: 1, y: 0 };
+            }
+            break;
+    }
 }
 
 // Iniciar juego
@@ -173,14 +310,16 @@ function startGame() {
     restartBtn.style.display = 'none';
     gameOverDiv.style.display = 'none';
     
-    // Iniciar bucle del juego
-    gameLoop = setInterval(moveSnake, 150);
+    gameLoop = setInterval(() => game.movePacMan(), 150);
 }
 
 // Reiniciar juego
 function restartGame() {
     clearInterval(gameLoop);
-    init();
+    gameRunning = false;
+    score = 0;
+    game.reset();
+    updateDisplay();
     startBtn.style.display = 'inline-block';
     restartBtn.style.display = 'none';
     gameOverDiv.style.display = 'none';
@@ -191,52 +330,12 @@ function gameOver() {
     gameRunning = false;
     clearInterval(gameLoop);
     
-    // Mostrar mensaje de juego terminado
     finalScoreElement.textContent = score;
     gameOverDiv.style.display = 'block';
     restartBtn.style.display = 'inline-block';
 }
 
-// Controles del teclado
-document.addEventListener('keydown', (e) => {
-    if (!gameRunning) return;
-    
-    // Prevenir scroll con las flechas
-    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
-        e.preventDefault();
-    }
-    
-    switch(e.key) {
-        case 'ArrowUp':
-            if (dy !== 1) {
-                dx = 0;
-                dy = -1;
-            }
-            break;
-        case 'ArrowDown':
-            if (dy !== -1) {
-                dx = 0;
-                dy = 1;
-            }
-            break;
-        case 'ArrowLeft':
-            if (dx !== 1) {
-                dx = -1;
-                dy = 0;
-            }
-            break;
-        case 'ArrowRight':
-            if (dx !== -1) {
-                dx = 1;
-                dy = 0;
-            }
-            break;
-    }
-});
-
-// Event listeners para botones
-startBtn.addEventListener('click', startGame);
-restartBtn.addEventListener('click', restartGame);
-
-// Inicializar el juego al cargar la página
-init();
+// Actualizar display
+function updateDisplay() {
+    scoreElement.textContent = score;
+}
